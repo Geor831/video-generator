@@ -1,2 +1,4 @@
-vk-api
+flask
+flask-cors
 requests
+werkzeug
