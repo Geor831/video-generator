@@ -23,6 +23,106 @@ SYSTEM_PROMPT = (
     "Ты не продаёшь товары, только помогаешь с видео. Отвечай кратко и структурированно."
 )
 
+# ===== ПАРСЕР СВОБОДНОЙ РЕЧИ =====
+
+def parse_duration(text: str):
+    """Находит длительность в тексте: 4, 6, 8, 10 или 1-4."""
+    text = text.lower().strip()
+    
+    # Прямое попадание
+    if text in {"1", "2", "3", "4"}:
+        return {"1": 4, "2": 6, "3": 8, "4": 10}[text]
+    
+    # Ищем числа в тексте
+    numbers = re.findall(r'\d+', text)
+    for num in numbers:
+        num = int(num)
+        if num in {4, 6, 8, 10}:
+            return num
+        elif 1 <= num <= 4:
+            return {1: 4, 2: 6, 3: 8, 4: 10}[num]
+    
+    # Ищем слова
+    if "четыре" in text or "4" in text:
+        return 4
+    elif "шесть" in text or "6" in text:
+        return 6
+    elif "восемь" in text or "8" in text:
+        return 8
+    elif "десять" in text or "10" in text:
+        return 10
+    
+    return None
+
+def parse_resolution(text: str):
+    """Находит разрешение: 480, 720, 1080 или 480p/720p/1080p."""
+    text = text.lower()
+    
+    # Прямое попадание
+    if text in {"1", "2", "3"}:
+        return {"1": "480p", "2": "720p", "3": "1080p"}[text]
+    
+    if "480" in text or "480p" in text or "четыреста" in text:
+        return "480p"
+    elif "720" in text or "720p" in text or "семьсот" in text:
+        return "720p"
+    elif "1080" in text or "1080p" in text or "тысяча" in text:
+        return "1080p"
+    
+    return None
+
+def parse_format(text: str):
+    """Находит формат: горизонтальный, вертикальный, квадратный."""
+    text = text.lower()
+    
+    # Прямое попадание
+    if text in {"1", "2", "3"}:
+        return {"1": "horizontal", "2": "vertical", "3": "square"}[text]
+    
+    if any(word in text for word in ["горизонт", "16:9", "широк", "горизонталь"]):
+        return "horizontal"
+    elif any(word in text for word in ["вертикаль", "9:16", "портрет", "вертикальн"]):
+        return "vertical"
+    elif any(word in text for word in ["квадрат", "1:1", "квадратн"]):
+        return "square"
+    
+    return None
+
+def extract_all_params(text: str):
+    """Вытаскивает все параметры из текста."""
+    duration = parse_duration(text)
+    resolution = parse_resolution(text)
+    format_type = parse_format(text)
+    
+    # Очищаем текст от чисел и ключевых слов, чтобы оставить только сцену
+    prompt = text
+    # Убираем цифры и слова-параметры
+    for word in ["секунд", "сек", "с", "формат", "разрешение", "разиришение", 
+                 "480", "720", "1080", "480p", "720p", "1080p",
+                 "16:9", "9:16", "1:1", "горизонтальный", "вертикальный", "квадратный",
+                 "горизонт", "вертикаль", "квадрат"]:
+        prompt = prompt.replace(word, "")
+    
+    # Убираем всё, что похоже на число
+    prompt = re.sub(r'\d+', '', prompt)
+    
+    # Убираем лишние символы и пробелы
+    prompt = re.sub(r'[^\w\s.,!?-]', ' ', prompt)
+    prompt = ' '.join(prompt.split()).strip()
+    
+    # Если промпт пустой, возвращаем None
+    if not prompt or len(prompt) < 3:
+        prompt = None
+    
+    return {
+        "duration": duration,
+        "resolution": resolution,
+        "format": format_type,
+        "prompt": prompt
+    }
+
+# ===== ФУНКЦИИ РАБОТЫ С AITUNNEL =====
+
 def ask_aitunnel(user_msg, history=None):
     if history is None:
         history = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -56,21 +156,25 @@ def generate_video(prompt_text: str, image_url: str = None, duration: int = 4, s
         "Authorization": f"Bearer {AITUNNEL_API_KEY}",
         "Content-Type": "application/json"
     }
-    # Маппинг размера
+    
+    # Маппинг размера с учётом формата
     size_map = {
         "480p": "480x480",
         "720p": "720x720",
         "1080p": "1080x1080"
     }
+    
     # Если пришло имя разрешения, преобразуем
     if size in size_map:
         size = size_map[size]
+    
     data = {
         "model": "seedance-2.0-mini",
         "prompt": prompt_text,
         "size": size,
         "duration": duration,
     }
+    
     if image_url:
         data["input_references"] = [
             {
@@ -117,14 +221,17 @@ def get_photo_url_from_event(event):
 
 def is_video_command(text: str) -> bool:
     text_lower = text.lower().strip()
-    return text_lower.startswith("видео") or text_lower.startswith("сделай видео") or "видео" in text_lower.split()[:2]
+    commands = ["видео", "сделай видео", "создай видео", "сгенерируй видео", "generate video", "make video"]
+    return any(text_lower.startswith(cmd) or cmd in text_lower.split()[:2] for cmd in commands)
 
 def extract_video_prompt(text: str) -> str:
-    for prefix in ["видео", "сделай видео"]:
+    for prefix in ["видео", "сделай видео", "создай видео", "сгенерируй видео"]:
         if text.lower().startswith(prefix):
             text = text[len(prefix):].strip()
             break
     return text if text else ""
+
+# ===== ОСНОВНАЯ ФУНКЦИЯ =====
 
 def main():
     print("🔄 Подключаюсь к ВК...")
@@ -132,7 +239,7 @@ def main():
     longpoll = VkLongPoll(vk_session, wait=90)
     vk = vk_session.get_api()
     upload = VkUpload(vk)
-    print("✅ Бот запущен (видео-помощник с опросом параметров)")
+    print("✅ Бот запущен (понимает свободную речь!)")
 
     dialogs = {}
     video_requests = {}
@@ -146,153 +253,132 @@ def main():
             # === КОМАНДА ВИДЕО ===
             if text and is_video_command(text):
                 prompt = extract_video_prompt(text)
-                if prompt:
-                    # Если сразу есть описание, начинаем опрос параметров
-                    video_requests[uid] = {
-                        "stage": "awaiting_duration",
-                        "prompt": prompt,
-                        "photo_url": photo_url,
-                        "duration": None,
-                        "size": None,
-                        "format": None
-                    }
+                
+                # Пробуем вытащить все параметры из текста
+                params = extract_all_params(prompt) if prompt else {"duration": None, "resolution": None, "format": None, "prompt": None}
+                
+                # Если есть описание и есть все параметры - сразу генерируем
+                if params["prompt"] and params["duration"] and params["resolution"] and params["format"]:
                     vk.messages.send(
                         user_id=uid,
-                        message=f"Отлично! Сцена: «{prompt}».\n"
-                                "Теперь выберите длительность:\n"
-                                "1 — 4 секунды\n"
-                                "2 — 6 секунд\n"
-                                "3 — 8 секунд\n"
-                                "4 — 10 секунд\n"
-                                "Введите номер (1–4).",
+                        message=f"✅ Все параметры распознаны!\n"
+                                f"📝 Сцена: {params['prompt'][:100]}...\n"
+                                f"⏱ Длительность: {params['duration']} сек\n"
+                                f"📐 Разрешение: {params['resolution']}\n"
+                                f"🔄 Формат: {params['format']}\n"
+                                f"🎬 Начинаю генерацию...",
                         random_id=0
                     )
+                    
+                    try:
+                        final_prompt = f"{params['prompt']}, {params['format']} format"
+                        video_file = generate_video(
+                            final_prompt,
+                            image_url=photo_url,
+                            duration=params["duration"],
+                            size=params["resolution"]
+                        )
+                        video_data = upload.video(
+                            video_file=video_file,
+                            name="Сгенерированное видео",
+                            description=f"{final_prompt}"
+                        )
+                        attachment = f"video{video_data['owner_id']}_{video_data['video_id']}"
+                        vk.messages.send(
+                            user_id=uid,
+                            message="🎬 Видео готово!",
+                            attachment=attachment,
+                            random_id=0
+                        )
+                        os.remove(video_file)
+                    except Exception as e:
+                        vk.messages.send(user_id=uid, message=f"❌ Ошибка: {str(e)}", random_id=0)
                     continue
-                else:
-                    # Нет описания → сначала спросим сцену
-                    video_requests[uid] = {
-                        "stage": "awaiting_prompt",
-                        "photo_url": photo_url,
-                        "duration": None,
-                        "size": None,
-                        "format": None,
-                        "prompt": None
-                    }
-                    vk.messages.send(
-                        user_id=uid,
-                        message="🎬 Что вы хотите показать в видео? Опишите сцену, объекты, настроение.",
-                        random_id=0
-                    )
-                    continue
+                
+                # Если не хватает параметров - начинаем опрос
+                video_requests[uid] = {
+                    "stage": "awaiting_duration" if not params["duration"] else 
+                              "awaiting_resolution" if not params["resolution"] else 
+                              "awaiting_format" if not params["format"] else 
+                              "awaiting_prompt",
+                    "prompt": params["prompt"],
+                    "photo_url": photo_url,
+                    "duration": params["duration"],
+                    "size": params["resolution"],
+                    "format": params["format"]
+                }
+                
+                # Отправляем сообщение о недостающих параметрах
+                missing = []
+                if not params["duration"]:
+                    missing.append("длительность")
+                if not params["resolution"]:
+                    missing.append("разрешение")
+                if not params["format"]:
+                    missing.append("формат")
+                if not params["prompt"]:
+                    missing.append("сцену")
+                
+                msg = f"📝 Чтобы создать видео, уточните: {', '.join(missing)}.\n\n"
+                if not params["duration"]:
+                    msg += "⏱ Длительность (4, 6, 8 или 10 секунд):\n"
+                if not params["resolution"]:
+                    msg += "📐 Разрешение (480p, 720p или 1080p):\n"
+                if not params["format"]:
+                    msg += "🔄 Формат (горизонтальный, вертикальный или квадратный):\n"
+                if not params["prompt"]:
+                    msg += "📝 Опишите сцену:"
+                
+                vk.messages.send(user_id=uid, message=msg, random_id=0)
+                continue
 
             # === ФОТО БЕЗ КОМАНДЫ ===
             if photo_url and not text:
                 vk.messages.send(
                     user_id=uid,
-                    message="📸 Фото получено. Если хотите создать видео с ним, напишите 'видео [описание]'.",
-                    random_id=0
+                    message="📸 Фото получено! Если хотите создать видео с ним, напишите 'видео [описание]'.",                    random_id=0
                 )
                 continue
 
             # === ОБРАБОТКА ЭТАПОВ ОПРОСА ===
             if uid in video_requests:
                 state = video_requests[uid]
-
-                if state["stage"] == "awaiting_prompt":
-                    # Сохраняем описание
-                    state["prompt"] = text
-                    state["stage"] = "awaiting_duration"
+                
+                # Если пришло фото - сохраняем
+                if photo_url and not text:
+                    state["photo_url"] = photo_url
                     vk.messages.send(
                         user_id=uid,
-                        message=f"Сцена: «{text}».\n"
-                                "Теперь выберите длительность:\n"
-                                "1 — 4 секунды\n"
-                                "2 — 6 секунд\n"
-                                "3 — 8 секунд\n"
-                                "4 — 10 секунд\n"
-                                "Введите номер (1–4).",
+                        message="📸 Фото сохранено! Продолжим...",
                         random_id=0
                     )
                     continue
 
-                if state["stage"] == "awaiting_duration":
-                    # Проверяем выбор длительности
-                    dur_map = {"1": 4, "2": 6, "3": 8, "4": 10}
-                    if text.strip() in dur_map:
-                        state["duration"] = dur_map[text.strip()]
-                        state["stage"] = "awaiting_resolution"
-                        vk.messages.send(
-                            user_id=uid,
-                            message="Выберите разрешение:\n"
-                                    "1 — 480p (базовое)\n"
-                                    "2 — 720p (стандартное)\n"
-                                    "3 — 1080p (HD)\n"
-                                    "Введите номер (1–3).",
-                            random_id=0
-                        )
-                    else:
-                        vk.messages.send(
-                            user_id=uid,
-                            message="Пожалуйста, введите номер от 1 до 4.",
-                            random_id=0
-                        )
-                    continue
-
-                if state["stage"] == "awaiting_resolution":
-                    res_map = {"1": "480p", "2": "720p", "3": "1080p"}
-                    if text.strip() in res_map:
-                        state["size"] = res_map[text.strip()]
-                        state["stage"] = "awaiting_format"
-                        vk.messages.send(
-                            user_id=uid,
-                            message="Выберите формат:\n"
-                                    "1 — Горизонтальный (16:9)\n"
-                                    "2 — Вертикальный (9:16, для Reels/TikTok)\n"
-                                    "3 — Квадратный (1:1)\n"
-                                    "Введите номер (1–3).",
-                            random_id=0
-                        )
-                    else:
-                        vk.messages.send(
-                            user_id=uid,
-                            message="Пожалуйста, введите номер от 1 до 3.",
-                            random_id=0
-                        )
-                    continue
-
-                if state["stage"] == "awaiting_format":
-                    fmt_map = {"1": "horizontal", "2": "vertical", "3": "square"}
-                    if text.strip() in fmt_map:
-                        state["format"] = fmt_map[text.strip()]
-                        # Формат влияет на разрешение: для вертикального используем 480x854 и т.п.
-                        # Но для простоты оставим квадратное разрешение, а формат учтём в промпте
-                        # Можно добавить в промпт указание ориентации
-                        state["stage"] = "awaiting_photo"
-                        vk.messages.send(
-                            user_id=uid,
-                            message=f"Параметры: {state['duration']} сек, {state['size']}, {state['format']}.\n"
-                                    "Есть фото для референса? Отправьте фото или напишите «нет».",
-                            random_id=0
-                        )
-                    else:
-                        vk.messages.send(
-                            user_id=uid,
-                            message="Пожалуйста, введите номер от 1 до 3.",
-                            random_id=0
-                        )
-                    continue
-
-                if state["stage"] == "awaiting_photo":
-                    # Проверяем, не прислал ли пользователь фото
-                    if photo_url:
-                        state["photo_url"] = photo_url
-                        # Генерируем с фото
-                        vk.messages.send(user_id=uid, message="📸 Фото получено! Генерирую видео...", random_id=0)
+                # Парсим ответ пользователя
+                if state["stage"] == "awaiting_prompt":
+                    state["prompt"] = text
+                    # Проверяем, есть ли ещё параметры в тексте
+                    params = extract_all_params(text)
+                    if params["duration"]:
+                        state["duration"] = params["duration"]
+                    if params["resolution"]:
+                        state["size"] = params["resolution"]
+                    if params["format"]:
+                        state["format"] = params["format"]
+                    
+                    state["stage"] = "awaiting_duration" if not state["duration"] else \
+                                    "awaiting_resolution" if not state["size"] else \
+                                    "awaiting_format" if not state["format"] else \
+                                    "ready"
+                    
+                    if state["stage"] == "ready":
+                        # Все параметры есть - генерируем
+                        vk.messages.send(user_id=uid, message="🎬 Все параметры получены! Начинаю генерацию...", random_id=0)
                         try:
                             final_prompt = f"{state['prompt']}, {state['format']} format"
                             video_file = generate_video(
                                 final_prompt,
-                                image_url=photo_url,
+                                image_url=state["photo_url"],
                                 duration=state["duration"],
                                 size=state["size"]
                             )
@@ -309,25 +395,147 @@ def main():
                                 random_id=0
                             )
                             os.remove(video_file)
-                        except PermissionError as e:
-                            vk.messages.send(
-                                user_id=uid,
-                                message=f"❌ {str(e)}\nПроверьте API-ключ AITunnel.",
-                                random_id=0
-                            )
                         except Exception as e:
                             vk.messages.send(user_id=uid, message=f"❌ Ошибка: {str(e)}", random_id=0)
                         del video_requests[uid]
                         continue
+                    else:
+                        # Отправляем запрос следующего параметра
+                        msg = "Отлично! Теперь уточните:\n"
+                        if not state["duration"]:
+                            msg += "⏱ Длительность (4, 6, 8 или 10 секунд):\n"
+                        elif not state["size"]:
+                            msg += "📐 Разрешение (480p, 720p или 1080p):\n"
+                        elif not state["format"]:
+                            msg += "🔄 Формат (горизонтальный, вертикальный или квадратный):\n"
+                        vk.messages.send(user_id=uid, message=msg, random_id=0)
+                        continue
 
-                    if text.lower() in ["нет", "без фото", "не"]:
-                        # Генерируем без фото
-                        vk.messages.send(user_id=uid, message="⏳ Генерирую видео без фото...", random_id=0)
+                if state["stage"] == "awaiting_duration":
+                    duration = parse_duration(text)
+                    if duration:
+                        state["duration"] = duration
+                        # Проверяем, не указано ли ещё что-то в тексте
+                        params = extract_all_params(text)
+                        if params["resolution"] and not state["size"]:
+                            state["size"] = params["resolution"]
+                        if params["format"] and not state["format"]:
+                            state["format"] = params["format"]
+                        
+                        state["stage"] = "awaiting_resolution" if not state["size"] else \
+                                        "awaiting_format" if not state["format"] else \
+                                        "ready"
+                        
+                        if state["stage"] == "ready":
+                            vk.messages.send(user_id=uid, message="🎬 Все параметры получены! Начинаю генерацию...", random_id=0)
+                            try:
+                                final_prompt = f"{state['prompt']}, {state['format']} format"
+                                video_file = generate_video(
+                                    final_prompt,
+                                    image_url=state["photo_url"],
+                                    duration=state["duration"],
+                                    size=state["size"]
+                                )
+                                video_data = upload.video(
+                                    video_file=video_file,
+                                    name="Сгенерированное видео",
+                                    description=f"{final_prompt}"
+                                )
+                                attachment = f"video{video_data['owner_id']}_{video_data['video_id']}"
+                                vk.messages.send(
+                                    user_id=uid,
+                                    message="🎬 Видео готово!",
+                                    attachment=attachment,
+                                    random_id=0
+                                )
+                                os.remove(video_file)
+                            except Exception as e:
+                                vk.messages.send(user_id=uid, message=f"❌ Ошибка: {str(e)}", random_id=0)
+                            del video_requests[uid]
+                            continue
+                        else:
+                            msg = "Отлично! Теперь уточните:\n"
+                            if not state["size"]:
+                                msg += "📐 Разрешение (480p, 720p или 1080p):\n"
+                            elif not state["format"]:
+                                msg += "🔄 Формат (горизонтальный, вертикальный или квадратный):\n"
+                            vk.messages.send(user_id=uid, message=msg, random_id=0)
+                            continue
+                    else:
+                        vk.messages.send(
+                            user_id=uid,
+                            message="⏱ Пожалуйста, укажите длительность: 4, 6, 8 или 10 секунд.\n"
+                                    "Примеры: '4 сек', '6', 'восемь'",
+                            random_id=0
+                        )
+                        continue
+
+                if state["stage"] == "awaiting_resolution":
+                    resolution = parse_resolution(text)
+                    if resolution:
+                        state["size"] = resolution
+                        params = extract_all_params(text)
+                        if params["format"] and not state["format"]:
+                            state["format"] = params["format"]
+                        
+                        state["stage"] = "awaiting_format" if not state["format"] else "ready"
+                        
+                        if state["stage"] == "ready":
+                            vk.messages.send(user_id=uid, message="🎬 Все параметры получены! Начинаю генерацию...", random_id=0)
+                            try:
+                                final_prompt = f"{state['prompt']}, {state['format']} format"
+                                video_file = generate_video(
+                                    final_prompt,
+                                    image_url=state["photo_url"],
+                                    duration=state["duration"],
+                                    size=state["size"]
+                                )
+                                video_data = upload.video(
+                                    video_file=video_file,
+                                    name="Сгенерированное видео",
+                                    description=f"{final_prompt}"
+                                )
+                                attachment = f"video{video_data['owner_id']}_{video_data['video_id']}"
+                                vk.messages.send(
+                                    user_id=uid,
+                                    message="🎬 Видео готово!",
+                                    attachment=attachment,
+                                    random_id=0
+                                )
+                                os.remove(video_file)
+                            except Exception as e:
+                                vk.messages.send(user_id=uid, message=f"❌ Ошибка: {str(e)}", random_id=0)
+                            del video_requests[uid]
+                            continue
+                        else:
+                            vk.messages.send(
+                                user_id=uid,
+                                message="🔄 Теперь укажите формат:\n"
+                                        "горизонтальный, вертикальный или квадратный",
+                                random_id=0
+                            )
+                            continue
+                    else:
+                        vk.messages.send(
+                            user_id=uid,
+                            message="📐 Пожалуйста, укажите разрешение: 480p, 720p или 1080p.\n"
+                                    "Примеры: '480', '720p', '1080'",
+                            random_id=0
+                        )
+                        continue
+
+                if state["stage"] == "awaiting_format":
+                    format_type = parse_format(text)
+                    if format_type:
+                        state["format"] = format_type
+                        state["stage"] = "ready"
+                        
+                        vk.messages.send(user_id=uid, message="🎬 Все параметры получены! Начинаю генерацию...", random_id=0)
                         try:
                             final_prompt = f"{state['prompt']}, {state['format']} format"
                             video_file = generate_video(
                                 final_prompt,
-                                image_url=None,
+                                image_url=state["photo_url"],
                                 duration=state["duration"],
                                 size=state["size"]
                             )
@@ -344,22 +552,19 @@ def main():
                                 random_id=0
                             )
                             os.remove(video_file)
-                        except PermissionError as e:
-                            vk.messages.send(
-                                user_id=uid,
-                                message=f"❌ {str(e)}\nПроверьте ключ AITunnel.",
-                                random_id=0
-                            )
                         except Exception as e:
                             vk.messages.send(user_id=uid, message=f"❌ Ошибка: {str(e)}", random_id=0)
                         del video_requests[uid]
+                        continue
                     else:
                         vk.messages.send(
                             user_id=uid,
-                            message="Отправьте фото или напишите «нет», чтобы продолжить.",
+                            message="🔄 Пожалуйста, укажите формат:\n"
+                                    "горизонтальный, вертикальный или квадратный\n"
+                                    "Примеры: 'горизонт', 'вертикаль', 'квадрат'",
                             random_id=0
                         )
-                    continue
+                        continue
 
             # === ОБЫЧНЫЙ ДИАЛОГ ===
             if uid not in dialogs:
