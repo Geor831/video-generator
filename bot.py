@@ -198,7 +198,6 @@ def generate_video(prompt_text: str, image_url: str = None, duration: int = 4, s
         ]
     
     print(f"📤 Отправка запроса в AITunnel...")
-    print(f"📦 Данные: {json.dumps(data, ensure_ascii=False, indent=2)}")
     
     response = requests.post(url, headers=headers, json=data, timeout=30)
     
@@ -212,10 +211,8 @@ def generate_video(prompt_text: str, image_url: str = None, duration: int = 4, s
     job = response.json()
     
     print(f"📋 ID задачи: {job.get('id')}")
-    print(f"🔄 Статус: {job.get('status')}")
     
     if "polling_url" not in job:
-        print(f"⚠️ Нет polling_url в ответе: {job}")
         raise Exception("API не вернул polling_url")
     
     for i in range(24):
@@ -223,8 +220,6 @@ def generate_video(prompt_text: str, image_url: str = None, duration: int = 4, s
         status_response = requests.get(job["polling_url"], headers=headers, timeout=30)
         status_response.raise_for_status()
         job = status_response.json()
-        
-        print(f"📊 Статус: {job.get('status')}")
         
         if job["status"] == "completed":
             break
@@ -236,17 +231,15 @@ def generate_video(prompt_text: str, image_url: str = None, duration: int = 4, s
         raise TimeoutError("Видео не сгенерировалось за 2 минуты")
     
     if "unsigned_urls" not in job or not job["unsigned_urls"]:
-        print(f"⚠️ Нет unsigned_urls в ответе: {job}")
         raise Exception("API не вернул ссылку на видео")
     
     video_url = job["unsigned_urls"][0]
-    print(f"🔗 Ссылка на видео: {video_url}")
+    print(f"🔗 Ссылка на видео получена")
     
     video_response = requests.get(video_url, headers=headers, timeout=60)
     video_response.raise_for_status()
     
     if len(video_response.content) < 1024:
-        print(f"⚠️ Подозрительно маленький файл: {len(video_response.content)} байт")
         content_type = video_response.headers.get('content-type', '')
         if 'text/html' in content_type:
             raise Exception("Вместо видео вернулась HTML-страница (возможно, ссылка недействительна)")
@@ -255,7 +248,7 @@ def generate_video(prompt_text: str, image_url: str = None, duration: int = 4, s
     with open(filename, "wb") as f:
         f.write(video_response.content)
     
-    print(f"✅ Файл сохранён: {filename} ({os.path.getsize(filename)} байт)")
+    print(f"✅ Файл сохранён: {filename}")
     return filename
 
 # ===== ФУНКЦИИ РАБОТЫ С ВК =====
@@ -323,7 +316,7 @@ def send_video_to_user(vk, upload, uid, video_file, final_prompt):
         
         vk.messages.send(
             user_id=uid,
-            message="🎬 Видео готово!",
+            message="🎬 Видео готово! Смотрите во вложении 👆",
             attachment=attachment,
             random_id=0
         )
@@ -338,18 +331,12 @@ def generate_and_send_video(vk, upload, uid, state):
     final_prompt = f"{state['prompt']}, {state['format']} format"
     
     print(f"🎬 Начинаю генерацию видео для пользователя {uid}")
-    print(f"📝 Промпт: {final_prompt}")
-    print(f"⏱ Длительность: {state['duration']} сек")
-    print(f"📐 Разрешение: {state['size']}")
-    print(f"🔄 Формат: {state['format']}")
-    print(f"📸 Фото: {state.get('photo_url', 'Нет')}")
+    print(f"📝 Промпт: {final_prompt[:100]}...")
     
     # Проверяем баланс
     balance = check_balance()
-    if balance is not None:
-        print(f"💰 Баланс: {balance}")
-        if balance < 1:
-            raise PermissionError("Недостаточно средств на балансе AITunnel. Пополните баланс.")
+    if balance is not None and balance < 1:
+        raise PermissionError("Недостаточно средств на балансе AITunnel. Пополните баланс.")
     
     # Генерируем видео
     video_file = generate_video(
@@ -366,14 +353,17 @@ def generate_and_send_video(vk, upload, uid, state):
     if os.path.getsize(video_file) == 0:
         raise Exception("Видеофайл пустой")
     
-    print(f"✅ Видео сохранено: {video_file} ({os.path.getsize(video_file)} байт)")
+    print(f"✅ Видео сохранено: {video_file}")
     
     # Отправляем в ВК
     send_video_to_user(vk, upload, uid, video_file, final_prompt)
     
     # Удаляем файл
-    os.remove(video_file)
-    print("🗑 Временный файл удалён")
+    try:
+        os.remove(video_file)
+        print("🗑 Временный файл удалён")
+    except:
+        pass
     
     return True
 
@@ -381,15 +371,17 @@ def generate_and_send_video(vk, upload, uid, state):
 
 def main():
     print("🔄 Подключаюсь к ВК...")
-    print(f"🔑 VK Token: {VK_TOKEN[:20]}...")
-    print(f"🔑 AITunnel Key: {AITUNNEL_API_KEY[:20]}...")
     
     try:
         vk_session = VkApi(token=VK_TOKEN)
         longpoll = VkLongPoll(vk_session, wait=90)
         vk = vk_session.get_api()
         upload = VkUpload(vk)
-        print("✅ Бот запущен (понимает свободную речь!)")
+        print("✅ Бот запущен! Понимает свободную речь и отправляет видео в чат!")
+        print("📝 Примеры команд:")
+        print("   'видео котик бежит'")
+        print("   'сделай видео пейзаж 6 секунд 1080p горизонтальный'")
+        print("   'сгенерируй видео ведро с овощами, вертикальный формат'")
     except Exception as e:
         print(f"❌ Ошибка подключения к ВК: {e}")
         return
@@ -422,7 +414,7 @@ def main():
                                     f"⏱ Длительность: {params['duration']} сек\n"
                                     f"📐 Разрешение: {params['resolution']}\n"
                                     f"🔄 Формат: {params['format']}\n"
-                                    f"🎬 Начинаю генерацию...",
+                                    f"⏳ Начинаю генерацию...",
                             random_id=0
                         )
                         
@@ -446,7 +438,7 @@ def main():
                                         f"• Закончился баланс на AITunnel\n"
                                         f"• Неверный API-ключ\n"
                                         f"• Сервис временно недоступен\n\n"
-                                        f"Попробуйте позже или обратитесь к администратору.",
+                                        f"Попробуйте позже.",
                                 random_id=0
                             )
                         continue
@@ -686,7 +678,7 @@ def main():
                 vk.messages.send(user_id=uid, message=answer, random_id=0)
                 
         except Exception as e:
-            print(f"❌ Критическая ошибка в обработке события: {e}")
+            print(f"❌ Критическая ошибка: {e}")
             import traceback
             traceback.print_exc()
             try:
