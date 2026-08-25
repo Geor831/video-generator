@@ -211,12 +211,45 @@ def generate_video(prompt_text: str, image_url: str = None, duration: int = 4, s
     return filename
 
 def get_photo_url_from_event(event):
-    if hasattr(event, 'attachments') and event.attachments:
-        for att in event.attachments:
-            if att['type'] == 'photo':
-                sizes = att['photo']['sizes']
-                largest = max(sizes, key=lambda x: x['width'] * x['height'])
-                return largest['url']
+    """Извлекает URL фото из события ВК."""
+    try:
+        # Проверяем наличие аттачей
+        if not hasattr(event, 'attachments') or not event.attachments:
+            return None
+        
+        attachments = event.attachments
+        
+        # Если attachments - строка, пробуем распарсить
+        if isinstance(attachments, str):
+            try:
+                attachments = json.loads(attachments)
+            except:
+                return None
+        
+        # Если attachments - список
+        if isinstance(attachments, list):
+            for att in attachments:
+                # Если элемент - словарь
+                if isinstance(att, dict):
+                    if att.get('type') == 'photo':
+                        photo = att.get('photo', {})
+                        sizes = photo.get('sizes', [])
+                        if sizes:
+                            largest = max(sizes, key=lambda x: x.get('width', 0) * x.get('height', 0))
+                            return largest.get('url')
+                # Если элемент - объект VK API
+                elif hasattr(att, 'type'):
+                    if att.type == 'photo':
+                        if hasattr(att, 'photo'):
+                            photo = att.photo
+                            if hasattr(photo, 'sizes'):
+                                sizes = photo.sizes
+                                if sizes:
+                                    largest = max(sizes, key=lambda x: x.width * x.height)
+                                    return largest.url
+    except Exception as e:
+        print(f"Ошибка при получении фото: {e}")
+    
     return None
 
 def is_video_command(text: str) -> bool:
