@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎬 Генератор видео с чётким голосом</title>
+    <title>RB — Reels Boss</title>
     <style>
         * {
             margin: 0;
@@ -303,14 +303,9 @@
             color: #1565c0;
         }
 
-        .badge.voice {
-            background: #fff3e0;
-            color: #e65100;
-        }
-
-        .badge.hd {
-            background: #e8f5e9;
-            color: #2e7d32;
+        .badge.precise {
+            background: #ffebee;
+            color: #c62828;
         }
 
         .log {
@@ -371,6 +366,48 @@
             border-left: 3px solid #2196f3;
         }
 
+        .precision-hint {
+            background: #ffebee;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #c62828;
+            margin-top: 5px;
+            border-left: 3px solid #f44336;
+        }
+
+        .progress-container {
+            margin: 10px 0;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.5s;
+            border-radius: 4px;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            text-align: center;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 20px;
@@ -384,18 +421,17 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎬 Генератор видео с чётким голосом</h1>
-        <p class="subtitle">Напишите сценарий с репликами — ИИ создаст видео с голосом</p>
+        <h1>🎬 RB — Reels Boss</h1>
+        <p class="subtitle">Напишите описание — ИИ создаст видео с музыкой и текстом</p>
 
         <div id="status" class="status"></div>
 
         <form id="form">
             <div class="form-group">
-                <label>📝 Сценарий с репликами <span class="badge auto">свободная речь</span> <span class="badge voice">🎤 голос</span></label>
-                <textarea id="prompt" placeholder='Например: "Добро пожаловать!" Показываем новое пластиковое ведро EVA.store. "Надёжно и удобно!"'></textarea>
-                <div class="voice-hint">
-                    💡 <strong>Как добавить голос:</strong> Реплики в <strong>кавычках</strong> "вот так" — ИИ их озвучит.
-                    <br>Пример: <em>"Привет!" Показываем ведро. "Оно идеально подходит для хранения!"</em>
+                <label>📝 Описание сцены <span class="badge auto">свободная речь</span></label>
+                <textarea id="prompt" placeholder="Например: круглое белое ведро 20л на деревянном столе, банки с огурцами, осенний свет, цена 300 рублей"></textarea>
+                <div class="voice-hint" style="display: none;">
+                    💡 Реплики в кавычках "..." будут озвучены голосом
                 </div>
             </div>
 
@@ -406,7 +442,7 @@
                         <option value="4">4 сек</option>
                         <option value="6">6 сек</option>
                         <option value="8">8 сек</option>
-                        <option value="10" selected>10 сек (максимум)</option>
+                        <option value="10" selected>10 сек</option>
                     </select>
                     <div class="duration-hint">
                         ⚠️ Максимум 10 секунд для этой модели
@@ -431,15 +467,13 @@
                 </div>
             </div>
 
-            <div class="form-group">
-                <label>🎤 Чёткий голос <span class="badge hd">HD</span></label>
+            <div class="form-group" style="display: none;">
+                <label>🎤 Голос</label>
                 <select id="voice">
-                    <option value="alloy">Alloy (нейтральный, чёткий)</option>
-                    <option value="echo" selected>Echo (уверенный, разборчивый)</option>
-                    <option value="fable">Fable (дружелюбный, мягкий)</option>
-                    <option value="onyx">Onyx (глубокий, чёткий)</option>
-                    <option value="nova">Nova (энергичный, яркий)</option>
-                    <option value="shimmer">Shimmer (мягкий, спокойный)</option>
+                    <option value="ru-RU-SvetlanaNeural">Светлана (женский)</option>
+                    <option value="ru-RU-DmitryNeural" selected>Дмитрий (мужской)</option>
+                    <option value="ru-RU-DariyaNeural">Дарья (женский)</option>
+                    <option value="ru-RU-GeorgiyNeural">Георгий (мужской)</option>
                 </select>
             </div>
 
@@ -451,13 +485,23 @@
                     <input type="file" id="imageInput" accept="image/*" multiple>
                 </div>
                 <div class="photos-preview" id="photosPreview"></div>
+                <div class="precision-hint" style="margin-top: 8px;">
+                    📸 <strong>Чем больше фото, тем точнее результат!</strong>
+                </div>
             </div>
 
             <button type="submit" class="btn" id="submitBtn">
-                <span class="text">🚀 Создать видео с голосом</span>
+                <span class="text">🚀 Создать видео</span>
                 <span class="spinner"></span>
             </button>
         </form>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">⏳ Ожидание...</div>
+        </div>
 
         <div style="margin-top: 15px; text-align: center;">
             <button class="test-btn" onclick="testAPI()">🔍 Проверить API-ключ</button>
@@ -472,16 +516,14 @@
         <div id="log" class="log"></div>
 
         <div class="examples">
-            💡 <strong>Примеры с голосом:</strong><br>
-            <span class="example" onclick="setExample(this)">"Осень — время заготовок!" Показываем ведро EVA.store с овощами. "Надёжно и удобно!" 10 сек, 720p, вертикальный</span>
+            💡 <strong>Примеры промтов:</strong><br>
+            <span class="example" onclick="setExample(this)">круглое белое ведро 20л на деревянном столе, банки с огурцами и помидорами, осенний свет, цена 300 рублей</span>
             <br>
-            <span class="example" onclick="setExample(this)">"Добро пожаловать!" Красивый закат на море. "Наслаждайтесь моментом!" 10 сек, 720p</span>
+            <span class="example" onclick="setExample(this)">походная печь EVA.store в зимнем лесу, снег, палатка, огонь, цена 18 000 ₽</span>
             <br>
-            <span class="example" onclick="setExample(this)">"Смотрите!" Котик играет с клубком. "Мило, правда?" 8 сек, горизонтальный</span>
+            <span style="font-size:12px;color:#999;">🎵 Видео без голоса — с музыкой и текстом</span>
             <br>
-            <span style="font-size:12px;color:#999;">✅ Реплики в кавычках "..." будут озвучены чётким голосом</span>
-            <br>
-            <span style="font-size:12px;color:#999;">⚠️ Максимальная длительность — 10 секунд</span>
+            <span style="font-size:12px;color:#999;">⚠️ Максимальная длительность — 10 секунд, ожидание до 5 минут</span>
         </div>
     </div>
 
@@ -503,12 +545,11 @@
             if (text.includes('восемь')) return 8;
             if (text.includes('десять')) return 10;
             
-            // Если нашли 15, заменяем на 10
             const numbers = text.match(/\d+/g);
             if (numbers) {
                 for (let num of numbers) {
                     num = parseInt(num);
-                    if (num === 15) return 10; // 15 → 10
+                    if (num === 15) return 10;
                     if ([4, 6, 8, 10].includes(num)) return num;
                 }
             }
@@ -604,6 +645,9 @@
         const videoPlayer = document.getElementById('videoPlayer');
         const downloadBtn = document.getElementById('downloadBtn');
         const logEl = document.getElementById('log');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
 
         let selectedFiles = [];
 
@@ -617,6 +661,12 @@
             logEl.textContent += message + '\n';
             logEl.scrollTop = logEl.scrollHeight;
             console.log(message);
+        }
+
+        function updateProgress(value, text) {
+            progressContainer.classList.add('active');
+            progressFill.style.width = Math.min(100, value) + '%';
+            progressText.textContent = text || `⏳ ${Math.min(100, Math.round(value))}%`;
         }
 
         // Загрузка нескольких фото
@@ -720,16 +770,15 @@
         }
 
         // ============================================================
-        // 5. ГЕНЕРАЦИЯ ВИДЕО С ЧЁТКИМ ГОЛОСОМ
+        // 5. ГЕНЕРАЦИЯ ВИДЕО (БЕЗ ГОЛОСА)
         // ============================================================
 
-        async function generateVideo(prompt, duration, resolution, format, voice, imageFiles) {
-            addLog('🚀 Начинаем генерацию с чётким голосом...');
-            addLog(`📝 Промпт: ${prompt}`);
+        async function generateVideo(prompt, duration, resolution, format, imageFiles) {
+            addLog('🚀 Начинаем генерацию видео...');
+            addLog(`📝 Промпт: ${prompt.substring(0, 200)}...`);
             addLog(`⏱ Длительность: ${duration} сек`);
             addLog(`📐 Разрешение: ${resolution}`);
             addLog(`🔄 Формат: ${format}`);
-            addLog(`🎤 Голос: ${voice} (чёткий)`);
             addLog(`📸 Фото: ${imageFiles.length} шт`);
             
             const size = getSize(resolution, format);
@@ -745,12 +794,17 @@
                 finalPrompt += ', горизонтальный формат 16:9';
             }
             
-            addLog(`📝 Финальный промпт: ${finalPrompt}`);
+            // Добавляем музыку
+            finalPrompt += ', фоновая музыка спокойная';
+            
+            addLog(`📝 Финальный промпт: ${finalPrompt.substring(0, 300)}...`);
             
             // Загружаем фото (до 5 штук)
             let imageUrls = [];
+            let photoProgress = 0;
             for (let file of imageFiles.slice(0, 5)) {
-                addLog(`📸 Загружаем фото...`);
+                photoProgress += 10;
+                updateProgress(photoProgress, `📸 Загрузка фото ${imageUrls.length + 1}/${imageFiles.length}...`);
                 try {
                     const formData = new FormData();
                     formData.append('image', file);
@@ -770,17 +824,18 @@
                 }
             }
             
-            // ===== ВКЛЮЧАЕМ ЧЁТКИЙ ГОЛОС =====
+            // ===== ВИДЕО БЕЗ ГОЛОСА =====
             const data = {
                 model: 'seedance-2.0-mini',
                 prompt: finalPrompt,
                 size: size,
                 duration: duration,
-                generate_audio: true,
-                voice: voice
+                generate_audio: false,  // ← ВЫКЛЮЧАЕМ ГОЛОС
+                strength: 0.9
             };
             
-            addLog(`🎤 generate_audio: true, voice: ${voice}`);
+            addLog(`🎵 generate_audio: false (только музыка)`);
+            addLog(`💪 strength: 0.9 (сильное влияние фото)`);
             
             if (imageUrls.length > 0) {
                 data.input_references = imageUrls.map(url => ({
@@ -791,6 +846,7 @@
             }
             
             addLog('📤 Отправляем запрос в AITunnel...');
+            updateProgress(30, '📤 Отправка запроса в AITunnel...');
             
             const headers = {
                 'Authorization': `Bearer ${API_KEY}`,
@@ -853,19 +909,25 @@
                 throw new Error('API не вернул polling_url');
             }
             
-            addLog('⏳ Ожидаем завершения генерации (до 2 минут)...');
+            addLog('⏳ Ожидаем завершения генерации (до 5 минут)...');
+            updateProgress(35, '⏳ Генерация видео... (до 5 минут)');
             
             let videoUrl = null;
-            for (let i = 0; i < 30; i++) {
+            const maxAttempts = 60;
+            for (let i = 0; i < maxAttempts; i++) {
                 try {
                     const statusResponse = await fetch(job.polling_url, { headers });
                     if (!statusResponse.ok) continue;
                     const statusData = await statusResponse.json();
                     
+                    const progress = 35 + (i / maxAttempts) * 60;
+                    updateProgress(progress, `⏳ Генерация... ${Math.round((i / maxAttempts) * 100)}% (${Math.round((maxAttempts - i) * 5)} сек осталось)`);
+                    
                     if (statusData.status === 'completed') {
                         if (statusData.unsigned_urls && statusData.unsigned_urls.length > 0) {
                             videoUrl = statusData.unsigned_urls[0];
-                            addLog(`✅ Видео с чётким голосом готово!`);
+                            addLog(`✅ Видео готово!`);
+                            updateProgress(100, '✅ Видео готово!');
                             break;
                         }
                     } else if (statusData.status === 'failed') {
@@ -879,12 +941,13 @@
             }
             
             if (!videoUrl) {
-                addLog('❌ Таймаут: видео не сгенерировалось', true);
-                throw new Error('Видео не сгенерировалось за 2.5 минуты.');
+                addLog('❌ Таймаут: видео не сгенерировалось за 5 минут', true);
+                throw new Error('Видео не сгенерировалось за 5 минут. Попробуйте упростить сценарий или используйте меньше фото.');
             }
             
             addLog(`🔗 Ссылка получена`);
             addLog('📥 Скачиваем видео...');
+            updateProgress(98, '📥 Скачивание видео...');
             
             try {
                 const videoResponse = await fetch(videoUrl, { headers });
@@ -897,6 +960,7 @@
                 const videoBlob = await videoResponse.blob();
                 const videoObjectUrl = URL.createObjectURL(videoBlob);
                 addLog(`✅ Видео загружено! Размер: ${(videoBlob.size / 1024).toFixed(1)} KB`);
+                updateProgress(100, '✅ Готово!');
                 return videoObjectUrl;
             } catch (e) {
                 addLog(`❌ Ошибка скачивания: ${e.message}`, true);
@@ -913,14 +977,7 @@
 
             const text = promptEl.value.trim();
             if (!text) {
-                showStatus('error', '❌ Напишите сценарий');
-                return;
-            }
-
-            // Проверяем, есть ли реплики в кавычках
-            const hasQuotes = /"[^"]*"/.test(text);
-            if (!hasQuotes) {
-                showStatus('error', '❌ Добавьте реплики в кавычках "..." для озвучки');
+                showStatus('error', '❌ Напишите описание сцены');
                 return;
             }
 
@@ -928,12 +985,11 @@
             const finalPrompt = params.prompt || text;
             
             if (!finalPrompt || finalPrompt.length < 3) {
-                showStatus('error', '❌ Сценарий слишком короткий.');
+                showStatus('error', '❌ Описание слишком короткое.');
                 return;
             }
 
             let finalDuration = params.duration || parseInt(durationEl.value);
-            // Если 15, заменяем на 10
             if (finalDuration === 15) {
                 finalDuration = 10;
                 durationEl.value = 10;
@@ -942,7 +998,6 @@
             
             let finalResolution = params.resolution || resolutionEl.value;
             const finalFormat = params.format || formatEl.value;
-            const finalVoice = voiceEl.value;
 
             if (finalResolution === '1080p') {
                 finalResolution = '720p';
@@ -951,12 +1006,14 @@
 
             logEl.textContent = '';
             logEl.style.display = 'none';
+            progressContainer.classList.remove('active');
+            progressFill.style.width = '0%';
 
             submitBtn.disabled = true;
             submitBtn.classList.add('loading');
             result.style.display = 'none';
             
-            showStatus('loading', '⏳ Генерация видео с чётким голосом... (1-2 минуты)');
+            showStatus('loading', '⏳ Генерация видео с музыкой... (до 5 минут)');
 
             try {
                 const videoUrl = await generateVideo(
@@ -964,11 +1021,10 @@
                     finalDuration,
                     finalResolution,
                     finalFormat,
-                    finalVoice,
                     selectedFiles
                 );
 
-                showStatus('success', '✅ Видео с чётким голосом готово! 🎤');
+                showStatus('success', '✅ Видео готово! 🎵');
                 videoPlayer.src = videoUrl;
                 downloadBtn.href = videoUrl;
                 result.style.display = 'block';
