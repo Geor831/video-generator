@@ -1,6 +1,0 @@
-@echo off
-echo Установка зависимостей...
-pip install flask flask-cors requests werkzeug
-echo Запуск сервера...
-python server.py
-pause
