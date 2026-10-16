@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__, static_folder='static', static_url_path='')
 
 # ===== НАСТРОЙКИ =====
-AITUNNEL_API_KEY = os.getenv("AITUNNEL_API_KEY", "sk-aitunnel-EJz97YJpiOwnaObmGNjf6mU8cT2OdP8L")
+AITUNNEL_API_KEY = os.getenv("AITUNNEL_API_KEY", "sk-aitunnel-Oez10d6T4U00LgjAFIl3HOlRURk7mcBZ")
 AITUNNEL_BASE = "https://api.aitunnel.ru/v1"
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp"}
